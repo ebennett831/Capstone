@@ -1,0 +1,103 @@
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Credentials and signing material
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+id_rsa
+id_ed25519
+credentials.json
+service-account*.json
+
+# JavaScript / TypeScript dependencies and caches
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+*.tsbuildinfo
+
+# Expo and frontend build output
+.expo/
+expo-env.d.ts
+web-build/
+/dist/
+/build/
+/apps/mobile/dist/
+/apps/mobile/web-build/
+
+# Python environments, bytecode, caches, and build output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+.eggs/
+/services/backend/build/
+/services/backend/dist/
+
+# Logs and temporary files
+*.log
+logs/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editors and operating systems
+.idea/
+.fleet/
+*.iml
+.vscode/*.local.json
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# Runtime uploads and generated processing output
+/uploads/
+/outputs/
+/processed/
+/services/backend/uploads/
+/services/backend/outputs/
+/services/backend/processed/
+/services/backend/data/uploads/
+/services/backend/data/processed/
+
+# Local datasets and large machine-learning artifacts
+# Keep small, intentional test fixtures outside these directories.
+/datasets/
+/models/
+/weights/
+/data/raw/
+/data/interim/
+/data/processed/
+/services/backend/datasets/
+/services/backend/models/
+/services/backend/weights/
+/services/backend/data/raw/
+/services/backend/data/interim/
