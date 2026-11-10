@@ -9,6 +9,8 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.162.2",
+    "mediapipe==1.2.2",
+    "opencv-contrib-python==5.0.0.93",
     "python-multipart>=0.0.33",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -24,4 +26,9 @@ build-backend = "uv_build"
 dev = [
     "httpx>=0.28.1",
     "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "model: requires the locally downloaded official MediaPipe model asset",
 ]

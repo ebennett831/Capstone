@@ -20,6 +20,8 @@ expo-env.d.ts
 
 # Metro
 .metro-health-check*
+.metro-cache/
+.cache/
 
 # debug
 npm-debug.*
@@ -42,3 +44,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# app-owned development recordings
+/recordings/

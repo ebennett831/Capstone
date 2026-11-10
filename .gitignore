@@ -89,6 +89,9 @@ Desktop.ini
 /services/backend/data/metadata/
 /services/backend/data/analyses/
 /services/backend/data/processed/
+/services/backend/data/frames/
+/services/backend/data/landmarks/
+/services/backend/data/overlays/
 
 # Local datasets and large machine-learning artifacts
 # Keep small, intentional test fixtures outside these directories.
@@ -103,3 +106,5 @@ Desktop.ini
 /services/backend/weights/
 /services/backend/data/raw/
 /services/backend/data/interim/
+/services/backend/training/runs/
+/services/backend/training/checkpoints/

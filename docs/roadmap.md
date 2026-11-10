@@ -1,6 +1,6 @@
 # AI Lacrosse Coach - Roadmap and Milestones
 
-**Updated:** November 9, 2026
+**Updated:** November 10, 2026
 **Repository:** https://github.com/ebennett831/Capstone
 
 ## Project goal
@@ -21,7 +21,7 @@ Engineering principles:
 | --- | --- | --- |
 | 1 - Foundation | Expo and FastAPI communicate; reproducible setup/tests | Complete |
 | 2 - Video pipeline | Select/record, preview, upload, persist, list, and delete | Implemented; physical-device verification pending |
-| 3 - Pose extraction | Inspectable landmarks and optional overlay | Planned |
+| 3 - Pose extraction | Inspectable landmarks and optional overlay | In progress; decoding and detection implemented |
 | 4 - Movement features + dataset | Reproducible calculations and labeled clips | Planned |
 | 5 - Single-movement classification | Evaluated baseline for a limited action set | Planned |
 | 6+ - Coaching/production | Evidence-based feedback and justified infrastructure | Future |
@@ -79,11 +79,13 @@ Milestone 2 limitations:
 
 Goal: run a repeatable computer-vision pipeline on a stored upload.
 
-- [ ] Decode frames and timestamps with OpenCV.
-- [ ] Estimate body landmarks with a documented MediaPipe model/version.
-- [ ] Record confidence, occlusion, and unusable-frame behavior.
-- [ ] Normalize coordinates and document camera-angle limitations.
-- [ ] Produce structured landmarks and an inspectable overlay.
+- [x] Decode local MP4/MOV frames and timestamps with a reusable OpenCV reader.
+- [x] Inspect metadata and save a representative frame with a local developer script.
+- [x] Estimate body landmarks with MediaPipe 1.2.2 and Pose Landmarker Lite float16 v1.
+- [x] Preserve missing detections plus per-landmark visibility and presence confidence.
+- [x] Preserve normalized image coordinates separately from estimated world coordinates.
+- [x] Produce structured per-frame landmark results without retaining raw images.
+- [ ] Produce an inspectable skeleton overlay.
 - [ ] Introduce truthful queued/processing/completed/failed states only with real processing.
 - [ ] Move CPU-heavy work out of the upload request when needed.
 
@@ -180,3 +182,5 @@ Only after the measured core pipeline justifies it:
 | 2026-11-09 | Only `uploaded` status | Processing does not exist yet |
 | 2026-11-09 | No Photos recording-time guess | Modification time is not original capture time |
 | 2026-11-09 | No bulk-delete HTTP route | Local maintenance does not belong on an unauthenticated network endpoint |
+| 2026-11-10 | MediaPipe 1.2.2 + OpenCV contrib 5.0.0.93 | Supports Python 3.13 and avoids installing two distributions into the `cv2` namespace |
+| 2026-11-10 | Pinned Pose Landmarker Lite float16 v1 model | Fast single-athlete baseline with explicit, checksum-verified local acquisition |

@@ -1,7 +1,7 @@
 # AI Lacrosse Coach - System Architecture
 
-**Updated:** November 9, 2026
-**Status:** Milestone 2 implemented; physical-device verification pending
+**Updated:** November 10, 2026
+**Status:** Milestone 2 implemented; Milestone 3 decoding and pose foundations implemented
 
 ## Scope
 
@@ -14,11 +14,13 @@ Implemented now:
 - Safe local MP4/MOV persistence with JSON metadata.
 - Metadata list/detail and individual deletion.
 - Guarded local bulk-cleanup command.
+- Streaming local MP4/MOV frame decoding and inspection with OpenCV.
+- Sequential single-athlete pose detection with MediaPipe Tasks Pose Landmarker.
 
 Not implemented:
 
 - Video streaming from the backend.
-- Frame decoding, pose estimation, stick tracking, movement inference, scores, or coaching feedback.
+- Stick tracking, movement inference, scores, or coaching feedback.
 - Authentication, accounts, database, cloud storage, jobs/queues, or production deployment.
 
 ## Architectural style
@@ -52,6 +54,7 @@ FastAPI
 | API routes | Multipart/Form parsing, response models, HTTP errors | Filesystem details |
 | Analysis service | Validation policy and orchestration | UI or arbitrary path resolution |
 | Local storage | Bounded writes, atomic publish, JSON, safe deletion | HTTP objects beyond the upload stream |
+| Vision | Local frame decoding and pose inference | HTTP behavior or persisted analysis status |
 
 ## Upload sequence
 
@@ -120,7 +123,7 @@ Accepted containers:
 - `.mp4` with `video/mp4` or `application/mp4`
 - `.mov` with `video/quicktime`
 
-The storage service keeps the first bytes while streaming. The analysis service checks that an `ftyp` box begins at the expected location and has a plausible size. This rejects text renamed to `.mp4`, but it is intentionally not a decoder. Full playability, codec support, duration, and frame integrity will be evaluated by the future frame-decoding pipeline.
+The storage service keeps the first bytes while streaming. The analysis service checks that an `ftyp` box begins at the expected location and has a plausible size. This rejects text renamed to `.mp4`, but it is intentionally not a decoder. The separate local OpenCV pipeline evaluates playability, codec support, duration, and frame integrity when a video is explicitly processed.
 
 ## Mobile lifecycle
 
@@ -151,6 +154,31 @@ My Uploads fetches the newest-first list on focus and on pull/manual refresh. Da
 - This API has no authentication or ownership checks. It must remain on a trusted development network and must not be publicly deployed.
 - Production storage, access control, HTTPS, retention, and user ownership remain future work.
 
-## Future CV boundary
+## Computer vision boundary
 
-Milestone 3 can consume the trusted UUID video path through ordinary Python functions. Only when real processing exists should states beyond `uploaded` and a background worker/job design be introduced. The mobile API contract can then add real results without moving computer-vision logic into route handlers.
+`backend.vision.VideoReader` consumes a trusted local video path through ordinary
+Python code, streams OpenCV BGR frames, and reports each frame's index and
+timestamp without loading the whole clip into memory. The local
+`scripts/inspect_video.py` utility exercises that boundary without FastAPI. Future
+computer-vision components consume the same frame iterator.
+
+`backend.vision.PoseTracker` converts each BGR frame to RGB and invokes MediaPipe
+1.2.2 Pose Landmarker in VIDEO mode with the official Lite float16 version 1
+model. It processes at most one athlete, retains both normalized image landmarks
+and estimated world landmarks, and preserves visibility and presence confidence.
+A frame with no detection produces an explicit result with no fabricated
+landmarks; later frames continue processing normally. Source timestamps are
+preserved while a separate strictly increasing millisecond timestamp satisfies
+MediaPipe's video API.
+
+Model acquisition is an explicit developer action through
+`scripts/download_pose_model.py`. The script downloads a pinned official Google
+asset, validates its SHA-256 checksum, and stores it under the Git-ignored backend
+model directory. `scripts/inspect_pose.py` streams VideoReader output through the
+tracker and reports diagnostic coverage without persisting landmarks or producing
+an overlay.
+
+Pose processing is not yet connected to uploads. Only when it is deliberately
+integrated should states beyond `uploaded` and a background worker/job design be
+introduced. The mobile API contract can then add real results without moving
+computer-vision logic into route handlers.
