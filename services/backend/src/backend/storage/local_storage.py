@@ -117,9 +117,14 @@ class LocalStorage:
             return None
         try:
             with path.open(encoding="utf-8") as metadata_file:
-                return AnalysisRecord.model_validate(json.load(metadata_file))
+                record = AnalysisRecord.model_validate(json.load(metadata_file))
         except (OSError, json.JSONDecodeError, ValidationError) as error:
             raise StorageIntegrityError(f"Invalid metadata record: {path.name}") from error
+        if record.analysis_id != analysis_id:
+            raise StorageIntegrityError(
+                f"Metadata ID does not match its filename: {path.name}"
+            )
+        return record
 
     def list_metadata(self) -> list[AnalysisRecord]:
         records: list[AnalysisRecord] = []

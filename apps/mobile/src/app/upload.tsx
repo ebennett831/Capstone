@@ -1,9 +1,9 @@
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
-import { Link } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Link, useFocusEffect, useIsFocused, usePreventRemove } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { VideoPreview } from '@/components/video-preview';
 import { createAnalysisUpload, type AnalysisUpload } from '@/lib/api';
@@ -44,12 +44,16 @@ function deleteOwnedDraft(draft: VideoDraft): boolean {
 
 export default function UploadScreen() {
   const cameraRef = useRef<CameraView | null>(null);
+  const isMounted = useRef(true);
   const recordingInFlight = useRef(false);
+  const discardRecordingOnResolve = useRef(false);
   const recordingStartedAt = useRef<string | null>(null);
   const recordingStats = useRef<RecordingStats>({ durationSeconds: 0 });
   const activeUpload = useRef<AnalysisUpload | null>(null);
+  const draftRef = useRef<VideoDraft | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
+  const isFocused = useIsFocused();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -59,8 +63,96 @@ export default function UploadScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState<AnalysisMetadata | null>(null);
+  const [allowRemoval, setAllowRemoval] = useState(false);
 
-  useEffect(() => () => activeUpload.current?.cancel(), []);
+  const stopActiveRecording = useCallback(() => {
+    if (recordingInFlight.current) {
+      cameraRef.current?.stopRecording();
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      return stopActiveRecording;
+    }, [stopActiveRecording]),
+  );
+
+  usePreventRemove(
+    !allowRemoval && (isRecording || draft?.isOwnedTemporary === true),
+    ({ repeat }) => {
+      if (isUploading) {
+        Alert.alert(
+          'Upload in progress',
+          'Cancel the upload before leaving so the temporary recording remains available for retry.',
+        );
+        return;
+      }
+
+      Alert.alert(
+        'Discard temporary recording?',
+        'Leaving this screen will permanently delete the app-owned recording.',
+        [
+          { text: 'Stay', style: 'cancel' },
+          {
+            text: 'Discard and leave',
+            style: 'destructive',
+            onPress: () => {
+              if (recordingInFlight.current) {
+                discardRecordingOnResolve.current = true;
+                stopActiveRecording();
+              }
+
+              const currentDraft = draftRef.current;
+              if (currentDraft?.isOwnedTemporary && !deleteOwnedDraft(currentDraft)) {
+                Alert.alert(
+                  'Could not discard recording',
+                  'The temporary file could not be deleted. Stay on this screen and try again.',
+                );
+                return;
+              }
+
+              draftRef.current = null;
+              setDraft(null);
+              setAllowRemoval(true);
+              repeat();
+            },
+          },
+        ],
+      );
+    },
+  );
+
+  useEffect(() => {
+    isMounted.current = true;
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') {
+        stopActiveRecording();
+      }
+    });
+
+    return () => {
+      isMounted.current = false;
+      appStateSubscription.remove();
+
+      if (recordingInFlight.current) {
+        discardRecordingOnResolve.current = true;
+        stopActiveRecording();
+      }
+
+      const currentDraft = draftRef.current;
+      const upload = activeUpload.current;
+      if (upload) {
+        upload.cancel();
+        if (currentDraft?.isOwnedTemporary) {
+          void upload.promise
+            .catch(() => undefined)
+            .then(() => deleteOwnedDraft(currentDraft));
+        }
+      } else if (currentDraft?.isOwnedTemporary) {
+        deleteOwnedDraft(currentDraft);
+      }
+    };
+  }, [stopActiveRecording]);
 
   async function chooseFromPhotos() {
     setErrorMessage(null);
@@ -74,8 +166,9 @@ export default function UploadScreen() {
         Alert.alert('Video is too large', 'Choose a video smaller than 100 MB.');
         return;
       }
+      if (!isMounted.current) return;
       const uriFilename = fileNameFromUri(asset.uri, 'selected-video.mp4');
-      setDraft({
+      const selectedDraft: VideoDraft = {
         uri: asset.uri,
         filename: asset.fileName ?? uriFilename,
         fileSizeBytes: asset.fileSize,
@@ -84,9 +177,13 @@ export default function UploadScreen() {
         source: 'photo_library',
         recordedAt: null,
         isOwnedTemporary: false,
-      });
+      };
+      draftRef.current = selectedDraft;
+      setDraft(selectedDraft);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Could not open the video picker.');
+      if (isMounted.current) {
+        setErrorMessage(error instanceof Error ? error.message : 'Could not open the video picker.');
+      }
     }
   }
 
@@ -95,6 +192,7 @@ export default function UploadScreen() {
     setUploaded(null);
     const cameraResult = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
     const microphoneResult = microphonePermission?.granted ? microphonePermission : await requestMicrophonePermission();
+    if (!isMounted.current) return;
     if (!cameraResult.granted || !microphoneResult.granted) {
       setErrorMessage('Camera and microphone permission are required to record a clip.');
       return;
@@ -106,6 +204,7 @@ export default function UploadScreen() {
   async function startRecording() {
     if (!cameraReady || recordingInFlight.current || !cameraRef.current) return;
     recordingInFlight.current = true;
+    discardRecordingOnResolve.current = false;
     recordingStartedAt.current = new Date().toISOString();
     recordingStats.current = { durationSeconds: 0 };
     setStats({ durationSeconds: 0 });
@@ -117,7 +216,7 @@ export default function UploadScreen() {
       const file = new File(result.uri);
       const uriFilename = fileNameFromUri(result.uri, `recording-${Date.now()}.mp4`);
       const finalStats = recordingStats.current;
-      setDraft({
+      const completedDraft: VideoDraft = {
         uri: result.uri,
         filename: uriFilename,
         fileSizeBytes: file.size ?? finalStats.fileSizeBytes,
@@ -126,13 +225,21 @@ export default function UploadScreen() {
         source: 'in_app_camera',
         recordedAt: recordingStartedAt.current,
         isOwnedTemporary: true,
-      });
+      };
+      if (discardRecordingOnResolve.current || !isMounted.current) {
+        deleteOwnedDraft(completedDraft);
+        return;
+      }
+      draftRef.current = completedDraft;
+      setDraft(completedDraft);
       setCameraOpen(false);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Recording failed.');
+      if (isMounted.current) {
+        setErrorMessage(error instanceof Error ? error.message : 'Recording failed.');
+      }
     } finally {
       recordingInFlight.current = false;
-      setIsRecording(false);
+      if (isMounted.current) setIsRecording(false);
     }
   }
 
@@ -145,19 +252,22 @@ export default function UploadScreen() {
     setStats(next);
   }
 
-  function discardDraft() {
-    if (!draft || isUploading) return;
+  function discardDraft(): boolean {
+    if (!draft || isUploading) return false;
     if (!deleteOwnedDraft(draft)) {
       setErrorMessage('The temporary recording could not be deleted; the operating system may clear it later.');
+      return false;
     }
+    draftRef.current = null;
     setDraft(null);
     setUploaded(null);
+    return true;
   }
 
   async function changeDraft() {
     if (!draft || isUploading) return;
     const source = draft.source;
-    discardDraft();
+    if (!discardDraft()) return;
     if (source === 'in_app_camera') await openCamera();
     else await chooseFromPhotos();
   }
@@ -173,14 +283,25 @@ export default function UploadScreen() {
       activeUpload.current = upload;
       const analysis = await upload.promise;
       const cleaned = deleteOwnedDraft(draft);
-      setDraft(null);
-      setUploaded(analysis);
-      if (!cleaned) setErrorMessage('Upload succeeded, but the temporary recording could not be deleted.');
+      if (cleaned) {
+        draftRef.current = null;
+        if (isMounted.current) setDraft(null);
+      }
+      if (isMounted.current) {
+        setUploaded(analysis);
+        if (!cleaned) {
+          setErrorMessage(
+            'Upload succeeded, but the temporary recording could not be deleted. Use Discard to retry cleanup.',
+          );
+        }
+      }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Upload failed. The video was kept for retry.');
+      if (isMounted.current) {
+        setErrorMessage(error instanceof Error ? error.message : 'Upload failed. The video was kept for retry.');
+      }
     } finally {
       activeUpload.current = null;
-      setIsUploading(false);
+      if (isMounted.current) setIsUploading(false);
     }
   }
 
@@ -204,6 +325,7 @@ export default function UploadScreen() {
           <CameraView
             ref={cameraRef}
             style={styles.camera}
+            active={isFocused}
             facing="back"
             mode="video"
             onCameraReady={() => setCameraReady(true)}

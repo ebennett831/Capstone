@@ -261,6 +261,29 @@ def test_tampered_metadata_cannot_delete_outside_managed_storage(
     assert metadata_path.exists()
 
 
+def test_mismatched_metadata_id_cannot_delete_another_video(
+    client: TestClient,
+    tmp_path: Path,
+    mp4_bytes: bytes,
+):
+    first = upload_video(client, mp4_bytes, filename="first.mp4").json()
+    second = upload_video(client, mp4_bytes, filename="second.mp4").json()
+    first_id = UUID(first["analysis_id"])
+    second_id = UUID(second["analysis_id"])
+    first_metadata_path = tmp_path / "metadata" / f"{first_id}.json"
+    second_metadata_path = tmp_path / "metadata" / f"{second_id}.json"
+
+    second_metadata_path.write_text(first_metadata_path.read_text())
+
+    response = client.delete(f"/api/v1/analyses/{second_id}")
+
+    assert response.status_code == 500
+    assert (tmp_path / "uploads" / f"{first_id}.mp4").exists()
+    assert (tmp_path / "uploads" / f"{second_id}.mp4").exists()
+    assert first_metadata_path.exists()
+    assert second_metadata_path.exists()
+
+
 def test_invalid_source_is_rejected_by_schema(client: TestClient, mp4_bytes: bytes):
     response = upload_video(client, mp4_bytes, source="unknown")
     assert response.status_code == 422

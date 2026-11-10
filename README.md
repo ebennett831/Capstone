@@ -159,7 +159,9 @@ No internal path or stored filename is returned. Invalid UUID path parameters re
 
 Header validation confirms a basic ISO base media `ftyp` box. That is stronger than trusting a filename/MIME type, but it does **not** prove the complete file is playable. Full decoding validation is deferred until the computer-vision milestone rather than adding FFmpeg or OpenCV here.
 
-Delete an individual item in **My Uploads**. For local bulk maintenance, run from `services\backend`:
+Delete an individual item in **My Uploads**. For local bulk maintenance, first stop the FastAPI server and make sure no upload is in progress. The cleanup utility also removes managed `.uploading` temporary files, so running it beside an active server could race an in-flight upload.
+
+Then run from `services\backend`:
 
 ```cmd
 uv run python scripts\clear_uploads.py --dry-run
