@@ -4,7 +4,7 @@
 
 The project is being built in honest, testable stages: device-to-backend networking, a safe video pipeline, computer vision, motion features, and evaluated machine learning only when the data supports it.
 
-> **Status (November 9, 2026):** Milestone 2 is implemented in code. The Expo app can select or record and preview short clips, upload them with progress, and manage upload metadata. FastAPI stores MP4/MOV files and JSON metadata locally. Automated checks pass; the physical-iPhone checklist below still needs to be run. Pose estimation, movement recognition, scoring, and coaching feedback are not implemented.
+> **Status (November 10, 2026):** Milestones 1 and 2 are complete, including developer-confirmed physical-device verification. Milestone 3.1 decodes video with OpenCV, 3.2 estimates body pose with MediaPipe, and 3.3 generates inspectable skeleton-overlay videos. Milestone 3.4, structured landmark storage, is next. Movement recognition, scoring, and coaching feedback are not implemented.
 
 ## Technology stack
 
@@ -14,10 +14,10 @@ The project is being built in honest, testable stages: device-to-backend network
 | Device media | Expo Camera, ImagePicker, Video, FileSystem | Supported native media and transfer APIs |
 | Backend | Python 3.13+, FastAPI, Uvicorn | HTTP validation and upload orchestration |
 | Backend environment | uv | Dependencies and reproducible lockfile |
-| Milestone 2 persistence | Local files and JSON | Development-only videos and metadata |
-| Computer vision (planned) | OpenCV, MediaPipe | Future frame decoding and body landmarks |
+| Development persistence | Local files and JSON | Development-only videos and upload metadata |
+| Computer vision | OpenCV, MediaPipe Tasks | Frame decoding, body landmarks, and skeleton visualization |
 
-No database, cloud storage, Docker, queue, authentication system, or AI inference is used in Milestone 2.
+No database, cloud storage, Docker, queue, or authentication system is used. Computer vision runs through standalone local developer tools and is not connected to the upload API.
 
 ## Repository layout
 
@@ -35,10 +35,14 @@ Capstone/
 |   |   |-- api/              # FastAPI routes
 |   |   |-- schemas/          # Pydantic public/internal models
 |   |   |-- services/         # Upload/list/delete orchestration
-|   |   `-- storage/          # Constrained filesystem and JSON access
-|   |-- scripts/              # Guarded clear-all maintenance script
-|   |-- tests/                # Isolated API/storage tests
+|   |   |-- storage/          # Constrained filesystem and JSON access
+|   |   `-- vision/           # VideoReader, PoseTracker, PoseVisualizer
+|   |-- scripts/              # Cleanup, model download, inspection, overlays
+|   |-- tests/                # Isolated API, storage, and vision tests
 |   |-- data/                 # Runtime uploads + metadata (Git-ignored)
+|   |-- models/               # Downloaded MediaPipe model (Git-ignored)
+|   |-- outputs/              # Inspection images/videos (Git-ignored)
+|   |-- uv.lock               # Reproducible Python dependency lockfile
 |   `-- pyproject.toml
 |-- docs/
 |   |-- architecture.md
@@ -73,6 +77,19 @@ The development server uses port 8000:
 - `http://127.0.0.1:8000/docs`
 
 `--host 0.0.0.0` permits trusted-LAN access. Do not port-forward or publicly deploy this unauthenticated development server.
+
+The API does not require the MediaPipe model to start. To use the standalone
+computer-vision tools, download the pinned model explicitly:
+
+```cmd
+uv run python scripts\download_pose_model.py
+uv run python scripts\inspect_video.py "data\uploads\<video-uuid>.mov"
+uv run python scripts\inspect_pose.py "data\uploads\<video-uuid>.mov"
+uv run python scripts\visualize_pose.py "data\uploads\<video-uuid>.mov"
+```
+
+See [the backend README](services/backend/README.md) for model, confidence,
+overlay, overwrite, FPS, and audio details.
 
 ### Mobile: install, check, and start
 
@@ -157,7 +174,7 @@ No internal path or stored filename is returned. Invalid UUID path parameters re
 - Listing order uses backend-generated `uploaded_at`, newest first.
 - Runtime data folders are Git-ignored.
 
-Header validation confirms a basic ISO base media `ftyp` box. That is stronger than trusting a filename/MIME type, but it does **not** prove the complete file is playable. Full decoding validation is deferred until the computer-vision milestone rather than adding FFmpeg or OpenCV here.
+Header validation confirms a basic ISO base media `ftyp` box. That is stronger than trusting a filename/MIME type, but it does **not** prove the complete file is playable. The independent OpenCV tools now perform full frame decoding when a developer explicitly inspects or processes a stored video; upload requests still stop at the lightweight container check.
 
 Delete an individual item in **My Uploads**. For local bulk maintenance, first stop the FastAPI server and make sure no upload is in progress. The cleanup utility also removes managed `.uploading` temporary files, so running it beside an active server could race an in-flight upload.
 
@@ -180,9 +197,9 @@ The second command lists the managed count and requires typing `DELETE`. It cann
 
 Expo Camera records to app temporary storage and never calls a Photos save API. Successful upload, Retake, and Discard delete only an app-owned recording. Failed or cancelled uploads keep the draft for retry. Selected Photos assets are never deleted. The operating system may independently clear temporary cache files.
 
-## Manual iPhone verification checklist
+## Physical-device regression checklist
 
-These physical-device checks are not claimed as passed by the automated implementation:
+Milestone 2 physical-device acceptance was completed and confirmed by the developer. This checklist remains as a repeatable regression guide:
 
 1. Start FastAPI and open `/health` from the iPhone browser over the trusted LAN.
 2. Select an MP4/MOV from Photos, preview/play it, and upload it.
@@ -201,7 +218,7 @@ These physical-device checks are not claimed as passed by the automated implemen
 - Process only videos you have permission to use.
 - `EXPO_PUBLIC_` variables are bundled into the app and must never contain secrets.
 - The local API has no user ownership or authentication; keep it on a trusted development network.
-- The only successful analysis state today is `uploaded`. No processing, classification, score, or coaching result is fabricated.
+- The only public analysis state today is `uploaded`. Local vision scripts do not change API status or persist landmark datasets; classification, scores, and coaching results are not fabricated.
 - A single phone camera cannot automatically provide calibrated 3D motion or real physical speed.
 
 See [the roadmap](docs/roadmap.md) and [architecture notes](docs/architecture.md) for milestone boundaries and design decisions.

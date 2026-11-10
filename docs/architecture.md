@@ -1,7 +1,7 @@
 # AI Lacrosse Coach - System Architecture
 
 **Updated:** November 10, 2026
-**Status:** Milestone 2 implemented; Milestone 3 decoding, pose, and visualization foundations implemented
+**Status:** Milestones 1 and 2 complete; Milestone 3.1-3.3 complete; structured landmark storage (3.4) next
 
 ## Scope
 
@@ -21,6 +21,7 @@ Implemented now:
 Not implemented:
 
 - Video streaming from the backend.
+- Persistent structured pose-landmark storage.
 - Stick tracking, movement inference, scores, or coaching feedback.
 - Authentication, accounts, database, cloud storage, jobs/queues, or production deployment.
 

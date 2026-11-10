@@ -20,8 +20,8 @@ Engineering principles:
 | Milestone | Outcome | State |
 | --- | --- | --- |
 | 1 - Foundation | Expo and FastAPI communicate; reproducible setup/tests | Complete |
-| 2 - Video pipeline | Select/record, preview, upload, persist, list, and delete | Implemented; physical-device verification pending |
-| 3 - Pose extraction | Inspectable landmarks and optional overlay | In progress; decoding, detection, and overlay implemented |
+| 2 - Video pipeline | Select/record, preview, upload, persist, list, and delete | Complete |
+| 3 - Pose extraction | Inspectable landmarks and optional overlay | 3.1-3.3 complete; 3.4 next |
 | 4 - Movement features + dataset | Reproducible calculations and labeled clips | Planned |
 | 5 - Single-movement classification | Evaluated baseline for a limited action set | Planned |
 | 6+ - Coaching/production | Evidence-based feedback and justified infrastructure | Future |
@@ -60,12 +60,8 @@ Implemented:
 - [x] Backend tests isolated under pytest `tmp_path`.
 - [x] Expo SDK 58 type, lint, and compatibility validation.
 
-Remaining acceptance work:
-
-- [ ] Run the physical-iPhone checklist in the root README against a real MP4 and MOV.
-- [ ] Confirm CameraView recording is not added to Photos on the test iPhone.
-- [ ] Observe the device-specific picker URI and multipart progress behavior.
-- [ ] Confirm temporary recording cleanup on the test iPhone after a real successful upload.
+Physical-device acceptance was completed and confirmed by the developer. The root
+README retains the device checklist for future regression testing.
 
 Milestone 2 limitations:
 
@@ -79,13 +75,31 @@ Milestone 2 limitations:
 
 Goal: run a repeatable computer-vision pipeline on a stored upload.
 
+Completed steps:
+
+### 3.1 - OpenCV Video Decoding
+
 - [x] Decode local MP4/MOV frames and timestamps with a reusable OpenCV reader.
 - [x] Inspect metadata and save a representative frame with a local developer script.
+
+### 3.2 - MediaPipe Body Pose Detection
+
 - [x] Estimate body landmarks with MediaPipe 1.2.2 and Pose Landmarker Lite float16 v1.
 - [x] Preserve missing detections plus per-landmark visibility and presence confidence.
 - [x] Preserve normalized image coordinates separately from estimated world coordinates.
 - [x] Produce structured per-frame landmark results without retaining raw images.
+
+### 3.3 - Body Pose Skeleton Visualization
+
 - [x] Produce an inspectable, confidence-filtered skeleton-overlay MP4.
+
+Next development step:
+
+- [ ] **3.4 - Structured Landmark Storage:** define and persist versioned per-frame
+  pose results without changing their meaning or fabricating missing detections.
+
+Later integration work:
+
 - [ ] Introduce truthful queued/processing/completed/failed states only with real processing.
 - [ ] Move CPU-heavy work out of the upload request when needed.
 

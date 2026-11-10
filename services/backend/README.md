@@ -1,5 +1,9 @@
 # AI Lacrosse Coach backend
 
+Milestones 3.1-3.3 provide local video decoding, pose detection, and skeleton
+visualization. These tools stream results in memory; Milestone 3.4 structured
+landmark storage is the next step and is not implemented yet.
+
 ## Inspect a local video
 
 From `services/backend`, decode an existing locally uploaded MP4 or MOV without
