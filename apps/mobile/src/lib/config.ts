@@ -1,0 +1,3 @@
+export const MAX_RECORDING_DURATION_SECONDS = 20;
+export const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+export const UPLOAD_TIMEOUT_MS = 2 * 60 * 1000;

@@ -32,6 +32,21 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      "expo-video",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow AI Lacrosse Coach to record training clips.",
+          "microphonePermission": "Allow AI Lacrosse Coach to record audio with training clips.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow AI Lacrosse Coach to select a training video."
+        }
       ]
     ],
     "experiments": {

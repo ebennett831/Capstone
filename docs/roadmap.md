@@ -1,174 +1,126 @@
-# AI Lacrosse Coach — Roadmap and Milestones
+# AI Lacrosse Coach - Roadmap and Milestones
 
-**Updated:** November 9, 2026<br>
-**Repository:** https://github.com/ebennett831/Capstone<br>
-**Approach:** Learn the system architecture and data flow while using AI assistance for UI and routine implementation.
+**Updated:** November 9, 2026
+**Repository:** https://github.com/ebennett831/Capstone
 
-## 1. Project goal
+## Project goal
 
-Build a smartphone application that accepts videos of lacrosse shots and dodges, extracts interpretable movement data, and eventually delivers useful coaching feedback. Longer-term possibilities include stick tracking, recognition of multi-move sequences, athlete history, and progress tracking.
+Build a smartphone application that accepts lacrosse shots and dodges, extracts interpretable movement data, and eventually provides feedback supported by reproducible computer vision or evaluated models.
 
-**North star:** A user can submit an actual clip and receive an analysis whose outputs are backed by reproducible computer vision or evaluated models, rather than placeholder scores.
+Engineering principles:
 
-### Engineering principles
+- Build and verify a real end-to-end boundary before adding complexity.
+- Keep mobile UI, HTTP, storage, vision, and analysis responsibilities separate.
+- Do not claim AI, scores, or completion states that do not exist.
+- Test upload, persistence, frame processing, and model quality independently.
+- Protect athlete videos with explicit storage and deletion behavior.
 
-- **End-to-end first:** Make each stage work with real data before expanding its complexity.
-- **Separate responsibilities:** Mobile UI, HTTP API, video processing, and ML code should remain distinguishable.
-- **No fake AI:** Explicitly label unimplemented features; avoid invented form/explosiveness scores.
-- **Test each boundary:** Verify networking, upload, frame processing, and model results independently.
-- **Document decisions:** Record tradeoffs, limitations, bugs, and what was learned.
-- **Protect athlete data:** Use consent, storage controls, and a deletion plan before collecting a dataset.
-
-## 2. Milestone overview
+## Milestone overview
 
 | Milestone | Outcome | State |
 | --- | --- | --- |
-| **1 — Foundation** | Expo app and FastAPI server communicate; tests and docs added | **In progress — core flow works** |
-| **2 — Video upload** | Upload a real phone video and retrieve job status | Planned |
-| **3 — Pose extraction** | Inspectable landmarks and optional overlay from video | Planned |
-| **4 — Movement features + dataset** | Reproducible calculations and consistently labeled clips | Planned |
-| **5 — Single-movement classification** | Evaluated baseline recognizing supported actions | Planned |
-| **6+ — Coaching and production features** | Stick tracking, sequences, validated feedback, cloud services | Future / scope-dependent |
+| 1 - Foundation | Expo and FastAPI communicate; reproducible setup/tests | Complete |
+| 2 - Video pipeline | Select/record, preview, upload, persist, list, and delete | Implemented; physical-device verification pending |
+| 3 - Pose extraction | Inspectable landmarks and optional overlay | Planned |
+| 4 - Movement features + dataset | Reproducible calculations and labeled clips | Planned |
+| 5 - Single-movement classification | Evaluated baseline for a limited action set | Planned |
+| 6+ - Coaching/production | Evidence-based feedback and justified infrastructure | Future |
 
-These are **technical milestones**, not promised calendar dates. Scope depends on data quality, capstone requirements, and available time.
+## Milestone 1 - Foundation
 
-## 3. Milestone 1 — Foundation (current)
+Completed:
 
-**Goal:** Two independent applications in one GitHub monorepo; the phone sends a real HTTP request and displays the response from FastAPI.
+- [x] Expo Router + React Native + TypeScript mobile app.
+- [x] FastAPI backend managed with uv.
+- [x] `GET /health` with a real phone-to-development-computer request.
+- [x] Machine-specific API URL through ignored `.env.local`.
+- [x] Reproducible Windows CMD setup.
+- [x] pytest health coverage and mobile TypeScript checks.
 
-### Completed
+## Milestone 2 - Video pipeline
 
-- [x] Create and clone the new GitHub repository.
-- [x] Scaffold the React Native + Expo + TypeScript mobile app.
-- [x] Launch the app on an iPhone using Expo Go.
-- [x] Initialize the Python backend with uv and a `src/backend` package.
-- [x] Implement `GET /health` returning `{"status":"ok","service":"AI Lacrosse Coach API"}`.
-- [x] Run FastAPI locally using Uvicorn.
-- [x] Reach `/health` from the iPhone over the local network.
-- [x] Call `/health` from React Native and display connected/error/loading states.
-- [x] Review `.gitignore` and push the initial working commit.
+Goal: a user explicitly selects or records a clip, previews it locally, uploads it to FastAPI, and manages truthful persisted metadata without any fake computer-vision output.
 
-### Finish before calling Milestone 1 done
+Implemented:
 
-- [ ] Add a root `README.md` with reproducible **Windows CMD** setup instructions.
-- [ ] Commit `docs/roadmap.md` and `docs/architecture.md`.
-- [ ] Add `apps/mobile/.env.example` and verify `.env.local` remains ignored.
-- [ ] Add a `pytest`/`httpx` health endpoint test.
-- [ ] Run `npx tsc --noEmit` and the backend tests; fix actual failures.
-- [ ] Add a basic GitHub Actions CI workflow for frontend type checks and backend tests (recommended; can be completed as follow-up cleanup).
+- [x] Photos video selection with Expo ImagePicker; no media-library deletion.
+- [x] In-app CameraView recording with camera/microphone permissions, ready/recording states, native progress, and a central 20-second limit.
+- [x] Local playback through `useVideoPlayer` and `VideoView`.
+- [x] Explicit Upload, Retake/Replace, Discard, retry, progress, duplicate-press protection, cancellation, and timeout handling.
+- [x] Current `File.createUploadTask()` multipart API; no base64 or whole-video JS buffering.
+- [x] App-owned temporary recording cleanup after success/discard/retake; retention after failure.
+- [x] `POST /api/v1/analyses` with typed source and optional timezone-aware timestamp.
+- [x] MP4/MOV extension, declared MIME, nonempty, 100 MB, and basic `ftyp` validation.
+- [x] Bounded 1 MB upload reads, temporary staging, and atomic publish.
+- [x] UUID filenames, JSON metadata, UTC timestamps, and only the status `uploaded`.
+- [x] Newest-first list, detail, individual delete, and safe stale-metadata cleanup.
+- [x] My Uploads loading, empty, refresh, network-error, local-date, and confirmed-delete states.
+- [x] Guarded command-line bulk cleanup with dry-run and explicit `DELETE` confirmation.
+- [x] Runtime upload, metadata, and legacy analysis folders excluded from Git.
+- [x] Backend tests isolated under pytest `tmp_path`.
+- [x] Expo SDK 58 type, lint, and compatibility validation.
 
-**Definition of done:** Another developer can clone the repo, follow the README, start both apps, call `/health`, and run the tests without needing the original machine's hidden settings.
+Remaining acceptance work:
 
-**Concepts to know:** Monorepo, React state, frontend vs. backend, REST/HTTP GET, JSON, local IP vs. `localhost`, package managers, Git, basic test assertions.
+- [ ] Run the physical-iPhone checklist in the root README against a real MP4 and MOV.
+- [ ] Confirm CameraView recording is not added to Photos on the test iPhone.
+- [ ] Observe the device-specific picker URI and multipart progress behavior.
+- [ ] Confirm temporary recording cleanup on the test iPhone after a real successful upload.
 
-## 4. Milestone 2 — Video upload
+Milestone 2 limitations:
 
-**Goal:** Select a video on the phone, upload it to FastAPI, store it safely, and show its real upload state.
+- The `ftyp` check confirms a plausible container header, not complete decodability.
+- Photos recording time remains unknown unless a reliable picker result supplies it; filesystem modification time is never substituted.
+- Upload history is metadata-only. Backend video streaming is deliberately absent.
+- The local unauthenticated server is for trusted development only.
+- App drafts are not a persistent offline queue; the OS may clear temporary cache files.
 
-### Build
+## Milestone 3 - Pose extraction baseline
 
-- [ ] Add a mobile video picker and an upload screen.
-- [ ] Define `POST /api/v1/analyses` to accept multipart video uploads.
-- [ ] Validate content type, maximum size, and basic video readability; handle errors clearly.
-- [ ] Save uploads to a Git-ignored local directory using generated IDs (not untrusted filenames).
-- [ ] Return an analysis ID and a truthful initial status (such as `uploaded`).
-- [ ] Add `GET /api/v1/analyses/{id}` to read status/metadata.
-- [ ] Show upload progress, success, and failure in the mobile app.
-- [ ] Add endpoint tests for valid and invalid uploads.
+Goal: run a repeatable computer-vision pipeline on a stored upload.
 
-**Definition of done:** One real video from the iPhone reaches the backend, is persisted locally, and can be referenced by an analysis ID. **No computer vision is claimed yet.**
+- [ ] Decode frames and timestamps with OpenCV.
+- [ ] Estimate body landmarks with a documented MediaPipe model/version.
+- [ ] Record confidence, occlusion, and unusable-frame behavior.
+- [ ] Normalize coordinates and document camera-angle limitations.
+- [ ] Produce structured landmarks and an inspectable overlay.
+- [ ] Introduce truthful queued/processing/completed/failed states only with real processing.
+- [ ] Move CPU-heavy work out of the upload request when needed.
 
-**Key learning:** Multipart HTTP, file I/O, API schemas, client/server validation, safe filenames, and response codes.
+## Milestone 4 - Movement features and dataset
 
-## 5. Milestone 3 — Pose extraction baseline
+- [ ] Define measurable angles, orientation proxies, and timing features.
+- [ ] Document units, smoothing, missing frames, and camera assumptions.
+- [ ] Establish a standardized recording guide.
+- [ ] Define consent, retention, athlete/session labels, and evaluation splits.
+- [ ] Inspect feature calculations against real video.
 
-**Goal:** Run a repeatable computer vision pipeline on an uploaded video.
+## Milestone 5 - Individual movement recognition
 
-### Build
+- [ ] Start with a small, accurately labeled action set and simple baseline.
+- [ ] Split evaluation by athlete/session to reduce leakage.
+- [ ] Report per-class metrics, a confusion matrix, and failure modes.
+- [ ] Version models, feature definitions, and datasets.
+- [ ] Present uncertainty rather than invented precision.
 
-- [ ] Use OpenCV to decode video frames and capture timestamps.
-- [ ] Use MediaPipe Pose Landmarker to estimate body landmarks.
-- [ ] Track detection confidence/visibility and clearly report unusable frames.
-- [ ] Normalize pose coordinates; document normalization method and limitations.
-- [ ] Save structured per-frame data and generate a visual overlay for inspection.
-- [ ] Define analysis job statuses (for example `uploaded`, `processing`, `completed`, `failed`).
-- [ ] Move CPU-heavy work out of the HTTP request handler into an appropriate worker when necessary.
-- [ ] Test against varied real clips, including occlusion and poor camera angles.
+## Future work
 
-**Definition of done:** A real clip produces viewable landmarks and structured output, with explicit failures if detection is unreliable.
+Only after the measured core pipeline justifies it:
 
-**Key learning:** Video frame rate, frame coordinates, model confidence, data pipelines, and background jobs.
+- Lacrosse-stick keypoint detection.
+- Movement segmentation and multi-move sequences.
+- Feedback tied to verifiable observations.
+- Validated progress/history features.
+- Accounts, authentication, PostgreSQL, object storage, deployment, and retention automation.
 
-## 6. Milestone 4 — Biomechanics features and dataset
-
-**Goal:** Convert landmarks into explainable features and begin assembling a trustworthy labeled dataset.
-
-### Build
-
-- [ ] Define a limited set of measurable features (joint angles, torso orientation, hip/shoulder rotation proxies, timing).
-- [ ] Document coordinate systems, units, smoothing, missing-frame behavior, and camera-angle sensitivity.
-- [ ] Establish a standardized phone recording guide (full body, useful angle, consistent framing).
-- [ ] Define clip labels and athlete/session metadata with consent and retention rules.
-- [ ] Collect representative clips from different athletes and conditions.
-- [ ] Build a repeatable labeling and train/validation/test split process.
-
-**Definition of done:** Features are reproducible, interpretable, and inspected against videos; labels and splits are documented.
-
-**Key learning:** Signal processing, biomechanics assumptions, dataset bias, label quality, and evaluation design.
-
-## 7. Milestone 5 — Individual movement recognition
-
-**Goal:** Classify a **small, clearly defined** set of single-movement clips using measured results.
-
-Potential actions: overhand shot, sidearm shot, underhand shot, split dodge, roll dodge, face dodge. Start with fewer classes if the dataset is limited.
-
-### Build
-
-- [ ] Establish a simple baseline before trying a Transformer or other complex architecture.
-- [ ] Evaluate on held-out athletes/sessions to reduce data leakage.
-- [ ] Report per-class metrics, confusion matrix, and common failure modes.
-- [ ] Version models, feature definitions, and evaluation datasets.
-- [ ] Display classifications with uncertainty/limitations rather than implying certainty.
-
-**Definition of done:** A measured and repeatable classifier performs meaningfully on held-out videos, with limitations documented.
-
-**Key learning:** Model training, temporal data, overfitting, metrics, and generalization.
-
-## 8. Milestone 6+ — Stretch goals and long-term vision
-
-Potential directions, prioritized by capstone timeline and evidence:
-
-- Custom lacrosse-stick keypoint detection (head, shaft midpoint, butt end).
-- Movement segmentation and multi-movement sequence recognition.
-- Coaching explanations tied to verifiable motion observations.
-- Technique/form assessment validated with knowledgeable coaches.
-- Explosiveness **proxies** (not claims of actual speed without calibration).
-- Accounts, saved sessions, history, and progress charts.
-- PostgreSQL, object storage, deployment, observability, and retention controls.
-
-**Do not begin these before the core pipeline and dataset quality justify them.**
-
-## 9. Current next actions
-
-1. Add the three project documents in this package: root README, roadmap, architecture.
-2. Add `.env.example` and a backend health test; run the checks locally.
-3. Make a small **Milestone 1 completion** commit.
-4. Design the upload request/response and local storage conventions for Milestone 2.
-5. Implement a video upload **without** computer vision first.
-
-## 10. Decision log
+## Decision log
 
 | Date | Decision | Rationale |
 | --- | --- | --- |
-| 2026-11-09 | Fresh repository instead of continuing the old prototype | Simpler foundation and clearer ownership of each component |
-| 2026-11-09 | Expo + React Native + TypeScript for mobile | Shared mobile codebase and easy device testing |
-| 2026-11-09 | Python + FastAPI + uv for backend | Straightforward API development and future CV/ML integration |
-| 2026-11-09 | Keep one monorepo with two independently running apps | Low infrastructure complexity and clear boundaries |
-| 2026-11-09 | Milestone 1 ends at a real health check from the phone | Proves networking before introducing video or AI |
-| 2026-11-09 | Use AI for UI and scaffolding but learn architecture/data flow | Prioritizes practical understanding and demonstrable engineering decisions |
-
-## 11. Reference material
-
-The original capstone concept envisioned ten phases, including body pose estimation, stick tracking, biomechanics, temporal classification, scoring, and sequence coaching. The previous prototype has Python pose-processing ideas to reassess in Milestone 3; it should **not** be copied wholesale into the new repo.
-
-See [architecture.md](architecture.md) for the system design and [../README.md](../README.md) for local setup.
+| 2026-11-09 | Expo + TypeScript mobile, FastAPI + uv backend | Appropriate mobile workflow and future Python CV integration |
+| 2026-11-09 | Local files + JSON for Milestone 2 | Durable restart behavior without premature infrastructure |
+| 2026-11-09 | Current Expo File upload-task API | Native multipart progress/cancellation without JS video buffering |
+| 2026-11-09 | Basic ISO-BMFF header validation only | Adds a real content check without premature FFmpeg/OpenCV dependencies |
+| 2026-11-09 | Only `uploaded` status | Processing does not exist yet |
+| 2026-11-09 | No Photos recording-time guess | Modification time is not original capture time |
+| 2026-11-09 | No bulk-delete HTTP route | Local maintenance does not belong on an unauthenticated network endpoint |

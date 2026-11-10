@@ -1,212 +1,156 @@
-# AI Lacrosse Coach — System Architecture
+# AI Lacrosse Coach - System Architecture
 
-**Updated:** November 9, 2026<br>
-**Status:** Milestone 1 implementation with a documented future design
+**Updated:** November 9, 2026
+**Status:** Milestone 2 implemented; physical-device verification pending
 
-## 1. Purpose and scope
+## Scope
 
-This document explains how the project's parts communicate, what is **implemented now**, and what is **planned**. It intentionally describes a practical starting architecture instead of treating speculative AI components as already working.
+Implemented now:
 
-### Current capabilities (verified during Milestone 1)
+- Expo/React Native application with Expo Router.
+- FastAPI health endpoint and trusted-LAN mobile connection.
+- Photos selection and temporary in-app camera recording.
+- Local preview, multipart upload progress/cancellation, and retry behavior.
+- Safe local MP4/MOV persistence with JSON metadata.
+- Metadata list/detail and individual deletion.
+- Guarded local bulk-cleanup command.
 
-- Expo/React Native mobile application running in Expo Go on an iPhone.
-- FastAPI server running locally through Uvicorn.
-- `GET /health` returning a JSON status and service name.
-- Mobile app sending a request over the local network and showing a connection status.
+Not implemented:
 
-### Not implemented yet
+- Video streaming from the backend.
+- Frame decoding, pose estimation, stick tracking, movement inference, scores, or coaching feedback.
+- Authentication, accounts, database, cloud storage, jobs/queues, or production deployment.
 
-Video uploading, persistent analysis jobs, frame decoding, pose estimation, stick tracking, machine learning, coaching feedback, accounts, databases, cloud storage, and production hosting.
+## Architectural style
 
-## 2. Architectural style
-
-**Monorepo + modular monolith.** Both applications are committed together, but each runs independently.
+The repository is a monorepo containing two independently running applications. The backend is a small modular monolith.
 
 ```text
-Capstone/
-├── apps/mobile/
-│   ├── src/app/                  # Expo Router screens (index.tsx, _layout.tsx, etc.)
-│   ├── src/components/           # Reusable React Native components
-│   ├── app.json                  # Expo and EAS configuration
-│   ├── package.json              # Frontend dependencies/scripts
-│   └── .env.local                # Developer-specific API address; ignored by Git
-├── services/backend/
-│   ├── src/backend/
-│   │   ├── __init__.py
-│   │   └── main.py               # FastAPI instance and /health handler
-│   ├── pyproject.toml            # Python project/dependencies
-│   └── uv.lock                   # Reproducible Python dependencies
-├── docs/
-│   ├── architecture.md
-│   └── roadmap.md
-└── README.md
+Mobile UI
+  |-- Expo Router screens
+  |-- reusable preview/history components
+  |-- central typed API client
+  `-- Expo Camera/ImagePicker/Video/FileSystem
+
+HTTP multipart + JSON over trusted local Wi-Fi
+
+FastAPI
+  |-- API routes: HTTP parsing/status codes
+  |-- schemas: Pydantic public/internal records
+  |-- service: create/list/read/delete orchestration
+  `-- storage: constrained videos + atomic JSON files
 ```
 
-No Docker containers, microservices, message broker, database, or cloud infrastructure are required to make the initial HTTP connection work.
+`backend.main.create_app()` creates the storage and service and registers the router. Tests pass a `tmp_path` storage root and a smaller size limit where needed, so they cannot read or delete real uploads. The production development default resolves `services/backend/data` from the storage module's file location, not from the process working directory.
 
-### Responsibilities
+## Responsibilities
 
-| Area | Owns | Should not own |
+| Area | Owns | Does not own |
 | --- | --- | --- |
-| Mobile (`apps/mobile`) | UI, device permissions, video selection, request lifecycle, result presentation | Python inference, trusted validation, model training |
-| FastAPI (`services/backend`) | API contracts, input validation, IDs/status, orchestration, HTTP errors | Rendering the mobile UI |
-| Vision module (planned, backend-side) | Frame decoding, pose estimation, quality checks, landmarks | HTTP request/response objects |
-| Analysis module (planned) | Movement features, evaluated model inference | Device navigation, file upload transport |
-| Storage/persistence (planned) | Video blobs, metadata, analysis results, retention | Coaching logic |
+| Mobile screens/components | Permissions, selection, recording, preview, UI states | Trusted upload validation or server paths |
+| Mobile API client | Base URL, typed JSON, upload task, progress/cancel/timeout | UI rendering or binary conversion |
+| API routes | Multipart/Form parsing, response models, HTTP errors | Filesystem details |
+| Analysis service | Validation policy and orchestration | UI or arbitrary path resolution |
+| Local storage | Bounded writes, atomic publish, JSON, safe deletion | HTTP objects beyond the upload stream |
 
-**Design principle:** Keep the computer vision and analysis code callable as ordinary Python functions so an API handler or a future worker can reuse it.
-
-## 3. Current data flow: health check
+## Upload sequence
 
 ```mermaid
 sequenceDiagram
-    participant User as Player
-    participant App as Expo mobile app
-    participant API as FastAPI / Uvicorn
-    User->>App: Tap "Test Backend Connection"
-    App->>API: GET /health (HTTP)
-    API-->>App: 200 {status: "ok", service: "AI Lacrosse Coach API"}
-    App-->>User: Render "Backend online"
+    participant User
+    participant Mobile
+    participant API as FastAPI route/service
+    participant Disk as LocalStorage
+    User->>Mobile: Select or record clip
+    Mobile->>Mobile: Preview local URI
+    User->>Mobile: Tap Upload
+    Mobile->>API: multipart video + source + timestamps
+    API->>Disk: Stage bounded 1 MB chunks
+    API->>API: Validate extension, MIME, size, ftyp
+    API->>Disk: Atomically publish UUID video
+    API->>Disk: Atomically publish JSON metadata
+    API-->>Mobile: 201 metadata, status uploaded
+    Mobile->>Mobile: Delete app-owned recording only
 ```
 
-The app reads the backend base URL from `EXPO_PUBLIC_API_URL`, for example `http://192.168.1.105:8000`. That example address is a placeholder. A real phone must use the **computer's LAN IP**; `localhost` on the phone refers to the phone, not the Windows computer.
+The API never reads the complete video into memory. It stops when the running count exceeds 100 MB and removes the partial staging file on rejection or interruption.
 
-`0.0.0.0` is the backend's **listen address** for accepting connections; it is not the URL to type in a phone browser. Development currently uses **HTTP**. The phone and PC should be on a trusted private network.
+## Public API
 
-### Implemented API contract
-
-| Method | Path | Response | Status |
-| --- | --- | --- | --- |
-| `GET` | `/health` | `{"status":"ok","service":"AI Lacrosse Coach API"}` | Implemented |
-
-FastAPI also generates local interactive API documentation at `/docs`.
-
-### Where the code lives today
-
-- `apps/mobile/src/app/index.tsx`: Connection button, `fetch`, loading/error/success state, response display.
-- `services/backend/src/backend/main.py`: `FastAPI()` instance and health route.
-- `apps/mobile/app.json`: Expo project settings and EAS project link.
-- `apps/mobile/.env.local`: Locally configured server URL (must not be committed).
-
-## 4. Planned data flow: upload and analysis
-
-The system will be extended **in stages**. Uploading alone does not mean analysis is completed.
-
-```mermaid
-flowchart TD
-    A[Mobile: Select video] --> B[FastAPI: Validate upload]
-    B --> C[(Local video storage - initially)]
-    B --> D[(Analysis metadata/status)]
-    D --> E[Return analysis ID and uploaded status]
-    E --> F[Mobile: Poll analysis status]
-    C -. Milestone 3 .-> G[Background processing worker]
-    G --> H[OpenCV: Decode frames]
-    H --> I[MediaPipe: Detect body pose]
-    I --> J[Validate, normalize, and extract features]
-    J --> K[(Results and status)]
-    K --> F
-    J -. Later .-> L[Evaluated movement classifier]
-    L -. Later .-> M[Evidence-based coaching output]
-```
-
-The dashed portion represents future work. During Milestone 2, the backend can simply save a video and report `uploaded`. When video processing becomes CPU-intensive, we should process it **outside the HTTP request lifecycle**, with durable job state and a separate worker rather than blocking web requests.
-
-### Proposed upload API (not yet built)
-
-| Method | Endpoint | Purpose |
+| Method | Endpoint | Response |
 | --- | --- | --- |
-| `POST` | `/api/v1/analyses` | Upload a video; return ID and truthful initial status |
-| `GET` | `/api/v1/analyses/{analysis_id}` | Fetch metadata, job status, and later results |
+| `GET` | `/health` | Service health |
+| `POST` | `/api/v1/analyses` | `201` public analysis metadata |
+| `GET` | `/api/v1/analyses` | Newest-first `{"items": [...]}` |
+| `GET` | `/api/v1/analyses/{uuid}` | One public metadata record |
+| `DELETE` | `/api/v1/analyses/{uuid}` | `204` |
 
-Illustrative **future** response:
+Upload form fields:
 
-```json
-{
-  "analysis_id": "a-generated-uuid",
-  "status": "uploaded"
-}
-```
+| Field | Type | Behavior |
+| --- | --- | --- |
+| `video` | file | Required MP4/MOV upload |
+| `source` | enum | `in_app_camera` or `photo_library` |
+| `recorded_at` | datetime, optional | Must be timezone-aware; normalized to UTC |
+| `original_filename` | string, optional | Validated display-only name for picker cache uploads |
 
-Likely future status transitions:
+Public responses contain `analysis_id`, `original_filename`, `source`, `recorded_at`, `uploaded_at`, `file_size_bytes`, `content_type`, and the only current status, `uploaded`. `stored_filename` is internal and no absolute filesystem path is exposed.
+
+## Storage model
 
 ```text
-uploaded → queued → processing → completed
-                         └──────→ failed
+services/backend/data/
+|-- uploads/
+|   |-- <uuid>.mp4
+|   `-- <uuid>.mov
+`-- metadata/
+    `-- <uuid>.json
 ```
 
-A video may remain `uploaded` until job processing is implemented. Do not fabricate completed results in the meantime.
+Upload files first use `.<uuid>.uploading`. Metadata uses `.<uuid>.<temp-uuid>.tmp`. `os.replace()` publishes final files atomically. The JSON record includes a trusted generated `stored_filename`; submitted names never create paths.
 
-## 5. Future computer vision pipeline
+Deletion loads metadata by UUID, verifies that the stored video name is exactly the same UUID plus an allowed suffix, resolves it beneath the managed upload directory, then removes the video and metadata. If the video is already missing, the stale metadata is still removed. Invalid internal metadata cannot direct deletion outside managed storage.
 
-```text
-Video file
-  → OpenCV frame decoding and timestamps
-  → MediaPipe body landmarks
-  → Confidence/occlusion validation
-  → Missing-frame handling and normalization
-  → Biomechanical feature extraction
-  → Evaluated classification model (later)
-  → Explainable results for the mobile app
-```
+`scripts/clear_uploads.py` reuses `LocalStorage` to enumerate only generated UUID videos, metadata, and staging files. Dry-run performs no writes. A real run requires typing `DELETE`; no network bulk-delete route exists.
 
-### Body landmarks
+## Validation boundary
 
-MediaPipe can provide 2D image-space and estimated 3D/world pose landmarks. Their coordinate conventions, confidence indicators, and model-version dependencies must be documented. Estimated 3D values from a monocular camera are **not automatically calibrated real-world motion measurements**.
+Accepted containers:
 
-### Lacrosse stick tracking (later)
+- `.mp4` with `video/mp4` or `application/mp4`
+- `.mov` with `video/quicktime`
 
-Potential custom keypoints: stick head, shaft midpoint, and butt end in the image plane. They will require annotated training data and detection evaluation. Combining estimated 3D body landmarks with 2D stick keypoints requires consistent normalization and care with camera-angle dependence.
+The storage service keeps the first bytes while streaming. The analysis service checks that an `ftyp` box begins at the expected location and has a plausible size. This rejects text renamed to `.mp4`, but it is intentionally not a decoder. Full playability, codec support, duration, and frame integrity will be evaluated by the future frame-decoding pipeline.
 
-### Feature extraction (later)
+## Mobile lifecycle
 
-Candidate features: joint angles, torso/hip orientation, hip–shoulder separation proxies, movement timing, image-plane stick angle, and angular change. Features must specify units, camera assumptions, missing-landmark handling, and smoothing. Velocity inferred from video pixels is not automatically a true speed in meters per second.
+### Photos
 
-### Machine learning (later)
+`launchImageLibraryAsync({ mediaTypes: ['videos'], allowsEditing: false })` uses the system selection UI. The app does not add `expo-media-library`, request broad access just to browse, or delete selected URIs. Picker metadata is optional. No capture date is guessed.
 
-Start with a small, accurately labeled set of movement classes and a simple baseline. Split data by athlete/session, compare models on held-out examples, and report appropriate metrics. Introduce temporal models such as LSTMs or Transformers only if they improve measured results. Do not produce seemingly precise coaching/form scores without reference labels and validation.
+### In-app recording
 
-## 6. Storage and data model evolution
+Camera and microphone permissions are requested when Record is selected. `CameraView` must report ready before `recordAsync()` can run. A ref prevents duplicate recording calls. Recording start time is captured immediately before the promise starts. Native progress supplies elapsed time and size. A central constant limits clips to 20 seconds without forcing an iOS video quality.
 
-**Milestone 1:** No persistent application database; `/health` is stateless.
+Camera recordings remain in Expo's app cache. No save-to-Photos API is called. Retake, Discard, and successful upload call the current synchronous `File.delete()` only for a draft marked app-owned. Failed/cancelled uploads retain it for retry. The draft stays in the tab's screen state while the app session keeps that screen mounted; there is no persistent offline queue.
 
-**Milestone 2:** Git-ignored local video storage and minimal metadata tracking for uploads. Generate server-side file IDs; never derive storage paths directly from submitted filenames.
+### Upload
 
-**Later:** PostgreSQL may persist users, analysis jobs, clip metadata, landmark/feature references, and feedback. Object storage such as S3 can hold large videos and generated artifacts, with results linked by ID.
+The client uses `new File(uri).createUploadTask()` with `UploadType.MULTIPART`, `fieldName: 'video'`, form parameters, a foreground session, native progress, cancellation, and a two-minute timeout. It does not manually set a multipart boundary. A response is successful only after a 2xx status and runtime validation of the full metadata/UUID shape.
 
-Possible conceptual entities (not database tables yet):
+### History
 
-- **Analysis:** ID, status, created/updated timestamps, error summary, result reference.
-- **Video:** server-generated ID, safe storage path/key, file type, size, duration, retention status.
-- **Pose result:** landmark data, frame timestamps, detection quality, model/pipeline version.
-- **Model result:** predicted movement, confidence/calibration information, evaluation/model version.
+My Uploads fetches the newest-first list on focus and on pull/manual refresh. Dates use `Intl.DateTimeFormat`, which displays UTC API timestamps in the device's local timezone. Delete requires confirmation and refreshes after `204`.
 
-Avoid storing unnecessary personal data. Define ownership, deletion, and retention before collecting real clips from athletes.
+## Security and deployment boundary
 
-## 7. Security and reliability considerations
+- Runtime data and machine-specific environment values are ignored by Git.
+- Client metadata is never trusted for filesystem paths.
+- `EXPO_PUBLIC_API_URL` is public configuration, not a secret.
+- Upload limits are enforced during streaming, not after full buffering.
+- This API has no authentication or ownership checks. It must remain on a trusted development network and must not be publicly deployed.
+- Production storage, access control, HTTPS, retention, and user ownership remain future work.
 
-- **Files:** Limit upload size; validate media type and actual file readability; sanitize metadata; prevent path traversal.
-- **Credentials:** Keep secrets out of Git. `EXPO_PUBLIC_` variables are bundled into the mobile app and **must not contain secrets**.
-- **Local network:** Development-only HTTP is acceptable on a trusted LAN; production needs HTTPS and proper authentication/authorization.
-- **Request boundaries:** Show meaningful error messages and retry behavior; do not equate an accepted upload with a finished analysis.
-- **Performance:** Avoid running intensive CV/ML work synchronously inside the API handler once real processing is introduced.
-- **Testing:** Test the API contract, upload validation, pipeline reliability, and eventually held-out model performance.
-- **Privacy:** Collect videos with permission; consider access control, storage retention, and deletion before deployment.
+## Future CV boundary
 
-## 8. Design decisions and open questions
-
-| Decision | Choice today | Revisit when |
-| --- | --- | --- |
-| Code organization | Single monorepo | Build/deployment complexity requires a split |
-| Mobile runtime | Expo + React Native | A native module requires a development build |
-| Backend language | Python + FastAPI | No change expected for CV/ML work |
-| Job execution | None for health check | Video processing exceeds normal API request latency |
-| Video storage | Not yet implemented | Milestone 2 local upload; cloud later |
-| Database | None | Persistent analyses/accounts or concurrent workers require one |
-| ML architecture | No model yet | Labeled clips and baseline measurements are available |
-
-**Open:** First target lacrosse movement(s), standardized recording setup, capstone deadline, expected model accuracy, number/diversity of clips, and evaluation with knowledgeable coaches.
-
-## 9. Related docs
-
-- [Project setup and current status](../README.md)
-- [Milestones and acceptance criteria](roadmap.md)
+Milestone 3 can consume the trusted UUID video path through ordinary Python functions. Only when real processing exists should states beyond `uploaded` and a background worker/job design be introduced. The mobile API contract can then add real results without moving computer-vision logic into route handlers.

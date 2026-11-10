@@ -86,6 +86,8 @@ Desktop.ini
 /services/backend/outputs/
 /services/backend/processed/
 /services/backend/data/uploads/
+/services/backend/data/metadata/
+/services/backend/data/analyses/
 /services/backend/data/processed/
 
 # Local datasets and large machine-learning artifacts

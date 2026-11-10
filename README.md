@@ -2,172 +2,204 @@
 
 **A mobile-first capstone project for analyzing lacrosse movement from video.**
 
-The goal is to let a player record or select a short lacrosse clip, submit it for analysis, and eventually receive useful, evidence-based feedback about shots, dodges, and movement sequences. We're building the system incrementally: first the mobile-to-backend connection, then video upload, computer vision, motion features, and finally machine learning where the data supports it.
+The project is being built in honest, testable stages: device-to-backend networking, a safe video pipeline, computer vision, motion features, and evaluated machine learning only when the data supports it.
 
-> **Project status (November 9, 2026):** The Expo mobile app runs on an iPhone, the FastAPI backend exposes `GET /health`, and the mobile app can call that endpoint and show the connection status. **Video upload, pose estimation, movement recognition, and coaching feedback are not implemented yet.**
+> **Status (November 9, 2026):** Milestone 2 is implemented in code. The Expo app can select or record and preview short clips, upload them with progress, and manage upload metadata. FastAPI stores MP4/MOV files and JSON metadata locally. Automated checks pass; the physical-iPhone checklist below still needs to be run. Pose estimation, movement recognition, scoring, and coaching feedback are not implemented.
 
 ## Technology stack
 
 | Part | Technology | Responsibility |
 | --- | --- | --- |
-| Mobile application | React Native, Expo, TypeScript, Expo Router | User interface, device interaction, API requests |
-| Backend API | Python, FastAPI, Uvicorn | HTTP endpoints, validation, future analysis coordination |
-| Python environment | uv | Project dependencies and reproducible virtual environment |
-| Frontend dependencies | Node.js, npm | JavaScript/TypeScript tooling |
-| Video processing (planned) | OpenCV, MediaPipe | Frame decoding and body landmark detection |
-| Analysis (planned) | NumPy, SciPy, PyTorch | Motion features and evaluated models |
-| Persistence (planned) | PostgreSQL; local files initially, later S3-compatible storage | Analysis metadata, results, and videos |
+| Mobile | React Native, Expo SDK 58, TypeScript, Expo Router | Selection, recording, preview, upload, and history UI |
+| Device media | Expo Camera, ImagePicker, Video, FileSystem | Supported native media and transfer APIs |
+| Backend | Python 3.13+, FastAPI, Uvicorn | HTTP validation and upload orchestration |
+| Backend environment | uv | Dependencies and reproducible lockfile |
+| Milestone 2 persistence | Local files and JSON | Development-only videos and metadata |
+| Computer vision (planned) | OpenCV, MediaPipe | Future frame decoding and body landmarks |
 
-The repository is a **monorepo**: mobile and backend code live together but run as separate applications.
+No database, cloud storage, Docker, queue, authentication system, or AI inference is used in Milestone 2.
 
 ## Repository layout
 
 ```text
 Capstone/
-├── apps/
-│   └── mobile/
-│       ├── src/app/           # Expo Router screens and layouts
-│       ├── src/components/    # Reusable UI components
-│       ├── app.json           # Expo project configuration
-│       └── package.json       # Frontend scripts and dependencies
-├── services/
-│   └── backend/
-│       ├── src/backend/
-│       │   └── main.py        # FastAPI application and /health route
-│       ├── pyproject.toml     # Python project configuration
-│       └── uv.lock            # Locked Python dependencies
-├── docs/
-│   ├── architecture.md       # Current and future system design
-│   └── roadmap.md            # Milestones and acceptance criteria
-├── .gitignore
-└── README.md
+|-- apps/mobile/
+|   |-- src/app/              # Home, Record / Upload, My Uploads
+|   |-- src/components/       # Video preview and upload cards
+|   |-- src/lib/              # API, formatting, and configuration
+|   |-- src/types/            # Shared mobile analysis types
+|   |-- app.json              # Expo permissions/plugins
+|   `-- package.json
+|-- services/backend/
+|   |-- src/backend/
+|   |   |-- api/              # FastAPI routes
+|   |   |-- schemas/          # Pydantic public/internal models
+|   |   |-- services/         # Upload/list/delete orchestration
+|   |   `-- storage/          # Constrained filesystem and JSON access
+|   |-- scripts/              # Guarded clear-all maintenance script
+|   |-- tests/                # Isolated API/storage tests
+|   |-- data/                 # Runtime uploads + metadata (Git-ignored)
+|   `-- pyproject.toml
+|-- docs/
+|   |-- architecture.md
+|   `-- roadmap.md
+`-- .gitignore
 ```
 
-## Running locally on Windows (Command Prompt)
+## Run locally on Windows (Command Prompt)
 
 ### Prerequisites
 
 - Git
 - Node.js and npm
-- Python (backend project currently specifies Python **3.13 or newer**)
+- Python 3.13 or newer
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- A phone with Expo Go, or a compatible emulator/simulator
+- Expo Go on a physical phone, or a compatible simulator/emulator
 
-Use **two separate CMD terminals**: one for the Python backend and one for Expo. Commands below assume you've already cloned the repository and are in its root directory.
+Use separate CMD terminals for the backend and Expo. The commands assume the repository root is the current directory.
 
-### 1. Start the backend
+### Backend: install, test, and start
 
 ```cmd
 cd services\backend
 uv sync
+uv run pytest
 uv run uvicorn backend.main:app --reload --host 0.0.0.0
 ```
 
-The server will listen on port **8000**. On the development computer, open:
+The development server uses port 8000:
 
-- `http://127.0.0.1:8000/health` — API health check
-- `http://127.0.0.1:8000/docs` — FastAPI interactive API docs
+- `http://127.0.0.1:8000/health`
+- `http://127.0.0.1:8000/docs`
 
-Expected `/health` response:
+`--host 0.0.0.0` permits trusted-LAN access. Do not port-forward or publicly deploy this unauthenticated development server.
 
-```json
-{
-  "status": "ok",
-  "service": "AI Lacrosse Coach API"
-}
-```
+### Mobile: install, check, and start
 
-`--reload` watches for code changes. `--host 0.0.0.0` permits access over your local network; use it only on a trusted network and **do not port-forward the development server to the public internet**.
-
-### 2. Find the computer's LAN address
-
-In another CMD terminal, run:
-
-```cmd
-ipconfig
-```
-
-Find the `IPv4 Address` on your active Wi-Fi or Ethernet adapter, such as `192.168.1.105`. Your actual address will probably differ.
-
-Make sure your phone is connected to the same local network. Before launching the app, try visiting the backend from your phone browser using **HTTP, not HTTPS**:
-
-`http://YOUR_PC_IPV4:8000/health`
-
-If it does not load, check the IP address, Windows Firewall's private-network access, and Wi-Fi network isolation.
-
-### 3. Configure the mobile app
-
-From a **new CMD terminal** at the repository root:
-
-```cmd
-cd apps\mobile
-npm ci
-```
-
-Create a file named `apps/mobile/.env.local` with the following content, replacing the example address with your computer's actual LAN IPv4 address:
+Create `apps\mobile\.env.local` from `.env.example`, replacing the placeholder with the computer's active LAN IPv4 address:
 
 ```dotenv
 EXPO_PUBLIC_API_URL=http://192.168.1.105:8000
 ```
 
-The file path is relative to the repository root; if you're already inside `apps/mobile`, create `.env.local` in that directory. The `.env.local` file is intentionally Git-ignored because it contains **machine-specific configuration**. A future `.env.example` will document required variable names without a real local address.
-
-### 4. Start Expo
-
-From `apps/mobile`:
+Then run:
 
 ```cmd
+cd apps\mobile
+npm ci
+npx tsc --noEmit
+npx expo lint
+npx expo-doctor
 npx expo start
 ```
 
-Open the app through **Expo Go** on your phone. On the home screen, press **Test Backend Connection**. The expected result is **Backend online** with the FastAPI service name.
+Find the computer's current address with `ipconfig`. A real phone must use that address; `localhost` on the phone means the phone. If `.env.local` changes, restart with `npx expo start --clear`.
 
-If you change `.env.local`, restart Expo (for example `npx expo start --clear`). Keep the FastAPI terminal running while you test.
+The app has **Home**, **Record / Upload**, and **My Uploads** tabs. Home retains the Milestone 1 backend health check in a small development card.
 
-## How the apps communicate today
+## Video workflow
 
 ```text
-Player taps "Test Backend Connection"
-    ↓
-React Native calls fetch(`${EXPO_PUBLIC_API_URL}/health`)
-    ↓ HTTP GET over local Wi-Fi
-FastAPI executes the /health handler
-    ↓ JSON response
-React Native updates its connection status on screen
+Record a temporary clip or select a Photos video
+  -> preview locally with expo-video
+  -> explicitly tap Upload
+  -> expo-file-system streams multipart data with progress/cancellation
+  -> FastAPI validates extension, MIME type, size, and the ftyp container box
+  -> UUID-named video and JSON metadata are atomically published
+  -> the API returns truthful status "uploaded"
+  -> My Uploads displays or deletes the persisted metadata
 ```
 
-The frontend knows the **API contract**, not how the backend is implemented internally. Future video upload and results requests will follow the same separation of responsibilities.
+The mobile client reads only `EXPO_PUBLIC_API_URL`; components do not hardcode a development computer address. Binary videos are never converted to base64 or placed in JSON.
 
-## Development workflow
+### API contract
 
-1. Pick a small feature from [the roadmap](docs/roadmap.md).
-2. Understand the request/response flow and write the simplest working version.
-3. Run it manually; add automated tests appropriate to the feature.
-4. Document decisions or pitfalls in [the architecture notes](docs/architecture.md).
-5. Review `git status`, commit, and push only intended source and configuration files.
+| Method | Path | Success behavior |
+| --- | --- | --- |
+| `GET` | `/health` | `200` health JSON |
+| `POST` | `/api/v1/analyses` | `201` upload metadata |
+| `GET` | `/api/v1/analyses` | `200 {"items":[...]}` newest-first |
+| `GET` | `/api/v1/analyses/{analysis_id}` | `200` one metadata record |
+| `DELETE` | `/api/v1/analyses/{analysis_id}` | `204` after video and metadata deletion |
 
-Useful checks (after the relevant tooling/tests are added):
+The upload is `multipart/form-data` with:
+
+- `video`: required MP4 or MOV file
+- `source`: required `in_app_camera` or `photo_library`
+- `recorded_at`: optional timezone-aware timestamp
+- `original_filename`: optional, validated display-only name used because a device picker may upload a cache filename
+
+Example `201 Created` response:
+
+```json
+{
+  "analysis_id": "550e8400-e29b-41d4-a716-446655440000",
+  "original_filename": "overhand-shot.mov",
+  "source": "in_app_camera",
+  "recorded_at": "2026-11-10T01:15:00Z",
+  "uploaded_at": "2026-11-10T01:15:30Z",
+  "file_size_bytes": 12582912,
+  "content_type": "video/quicktime",
+  "status": "uploaded"
+}
+```
+
+No internal path or stored filename is returned. Invalid UUID path parameters receive `422`; unknown valid UUIDs receive `404`.
+
+## Local storage, validation, and deletion
+
+- Videos: `services/backend/data/uploads/<uuid>.mp4|mov`
+- Metadata: `services/backend/data/metadata/<uuid>.json`
+- Maximum upload: 100 MB, read and written in bounded 1 MB chunks.
+- A video is staged under a temporary generated name, validated, then published with `os.replace()`.
+- JSON is written to a temporary file and atomically published with `os.replace()`.
+- Only server-generated filenames are resolved for deletion. A stale metadata record is safely removed even if its video is already missing.
+- Listing order uses backend-generated `uploaded_at`, newest first.
+- Runtime data folders are Git-ignored.
+
+Header validation confirms a basic ISO base media `ftyp` box. That is stronger than trusting a filename/MIME type, but it does **not** prove the complete file is playable. Full decoding validation is deferred until the computer-vision milestone rather than adding FFmpeg or OpenCV here.
+
+Delete an individual item in **My Uploads**. For local bulk maintenance, run from `services\backend`:
 
 ```cmd
-:: from apps\mobile
-npx tsc --noEmit
-
-:: from services\backend, after adding pytest as a dev dependency
-uv run pytest
+uv run python scripts\clear_uploads.py --dry-run
+uv run python scripts\clear_uploads.py
 ```
 
-**Automated backend tests and CI are part of the remaining Milestone 1 cleanup; they are not in the initial commit.**
+The second command lists the managed count and requires typing `DELETE`. It cannot accept an arbitrary directory, and there is intentionally no bulk-delete HTTP endpoint.
 
-## Data, privacy, and limitations
+## Timestamps and temporary media
 
-- Do not commit `.env.local`, credentials, `.venv/`, `node_modules/`, generated output, athlete videos, or datasets.
-- Only process videos you have permission to use. Plan for deletion/retention rules before collecting real athlete data.
-- Early motion measurements are **prototypes**. A single phone camera cannot directly measure true 3D stick motion or accurately infer physical speed without calibration.
-- Do not present invented technique or explosiveness scores as validated coaching results.
+- `uploaded_at` is generated by FastAPI with `datetime.now(timezone.utc)` only after the video is stored.
+- In-app `recorded_at` is captured immediately before `recordAsync()` begins.
+- Photos selection sends `null` because modification time is not treated as original capture time.
+- The backend rejects naive timestamps and normalizes valid values to UTC.
+- My Uploads displays dates with the device's local timezone through `Intl.DateTimeFormat`.
 
-## Project documentation
+Expo Camera records to app temporary storage and never calls a Photos save API. Successful upload, Retake, and Discard delete only an app-owned recording. Failed or cancelled uploads keep the draft for retry. Selected Photos assets are never deleted. The operating system may independently clear temporary cache files.
 
-- [Roadmap & milestones](docs/roadmap.md)
-- [Architecture & engineering decisions](docs/architecture.md)
+## Manual iPhone verification checklist
 
-The longer-term vision includes computer vision, lacrosse stick tracking, movement classification, technique feedback, and progress history. These will be built and evaluated in stages—not all at once.
+These physical-device checks are not claimed as passed by the automated implementation:
+
+1. Start FastAPI and open `/health` from the iPhone browser over the trusted LAN.
+2. Select an MP4/MOV from Photos, preview/play it, and upload it.
+3. Confirm a UUID video exists under `data\uploads` and matching JSON under `data\metadata`.
+4. Inspect source, size, `recorded_at`, UTC `uploaded_at`, and `uploaded` status.
+5. Record an in-app clip, stop it, preview it, and upload it.
+6. Confirm the in-app recording was **not** added to Photos and its temporary draft disappears after success.
+7. Stop FastAPI, attempt an upload, confirm the draft remains, restart FastAPI, and retry.
+8. Delete one item from My Uploads and confirm both managed backend files disappear.
+9. Restart FastAPI and verify remaining history persists.
+10. Run the cleanup command with `--dry-run` and confirm it changes nothing.
+11. Run `git status --short --ignored` and confirm runtime videos, JSON, and `.env.local` are ignored.
+
+## Privacy and limitations
+
+- Process only videos you have permission to use.
+- `EXPO_PUBLIC_` variables are bundled into the app and must never contain secrets.
+- The local API has no user ownership or authentication; keep it on a trusted development network.
+- The only successful analysis state today is `uploaded`. No processing, classification, score, or coaching result is fabricated.
+- A single phone camera cannot automatically provide calibrated 3D motion or real physical speed.
+
+See [the roadmap](docs/roadmap.md) and [architecture notes](docs/architecture.md) for milestone boundaries and design decisions.
