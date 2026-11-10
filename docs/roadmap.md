@@ -21,7 +21,7 @@ Engineering principles:
 | --- | --- | --- |
 | 1 - Foundation | Expo and FastAPI communicate; reproducible setup/tests | Complete |
 | 2 - Video pipeline | Select/record, preview, upload, persist, list, and delete | Implemented; physical-device verification pending |
-| 3 - Pose extraction | Inspectable landmarks and optional overlay | In progress; decoding and detection implemented |
+| 3 - Pose extraction | Inspectable landmarks and optional overlay | In progress; decoding, detection, and overlay implemented |
 | 4 - Movement features + dataset | Reproducible calculations and labeled clips | Planned |
 | 5 - Single-movement classification | Evaluated baseline for a limited action set | Planned |
 | 6+ - Coaching/production | Evidence-based feedback and justified infrastructure | Future |
@@ -85,7 +85,7 @@ Goal: run a repeatable computer-vision pipeline on a stored upload.
 - [x] Preserve missing detections plus per-landmark visibility and presence confidence.
 - [x] Preserve normalized image coordinates separately from estimated world coordinates.
 - [x] Produce structured per-frame landmark results without retaining raw images.
-- [ ] Produce an inspectable skeleton overlay.
+- [x] Produce an inspectable, confidence-filtered skeleton-overlay MP4.
 - [ ] Introduce truthful queued/processing/completed/failed states only with real processing.
 - [ ] Move CPU-heavy work out of the upload request when needed.
 
@@ -184,3 +184,4 @@ Only after the measured core pipeline justifies it:
 | 2026-11-09 | No bulk-delete HTTP route | Local maintenance does not belong on an unauthenticated network endpoint |
 | 2026-11-10 | MediaPipe 1.2.2 + OpenCV contrib 5.0.0.93 | Supports Python 3.13 and avoids installing two distributions into the `cv2` namespace |
 | 2026-11-10 | Pinned Pose Landmarker Lite float16 v1 model | Fast single-athlete baseline with explicit, checksum-verified local acquisition |
+| 2026-11-10 | OpenCV `mp4v` for local pose overlays | Reuses the installed video stack and preserves decoded frame order/dimensions without adding dependencies; audio is intentionally omitted |

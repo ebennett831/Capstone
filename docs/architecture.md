@@ -1,7 +1,7 @@
 # AI Lacrosse Coach - System Architecture
 
 **Updated:** November 10, 2026
-**Status:** Milestone 2 implemented; Milestone 3 decoding and pose foundations implemented
+**Status:** Milestone 2 implemented; Milestone 3 decoding, pose, and visualization foundations implemented
 
 ## Scope
 
@@ -16,6 +16,7 @@ Implemented now:
 - Guarded local bulk-cleanup command.
 - Streaming local MP4/MOV frame decoding and inspection with OpenCV.
 - Sequential single-athlete pose detection with MediaPipe Tasks Pose Landmarker.
+- Confidence-filtered skeleton-overlay MP4 generation for local inspection.
 
 Not implemented:
 
@@ -54,7 +55,7 @@ FastAPI
 | API routes | Multipart/Form parsing, response models, HTTP errors | Filesystem details |
 | Analysis service | Validation policy and orchestration | UI or arbitrary path resolution |
 | Local storage | Bounded writes, atomic publish, JSON, safe deletion | HTTP objects beyond the upload stream |
-| Vision | Local frame decoding and pose inference | HTTP behavior or persisted analysis status |
+| Vision | Local frame decoding, pose inference, and debug visualization | HTTP behavior or persisted analysis status |
 
 ## Upload sequence
 
@@ -171,12 +172,24 @@ landmarks; later frames continue processing normally. Source timestamps are
 preserved while a separate strictly increasing millisecond timestamp satisfies
 MediaPipe's video API.
 
+`backend.vision.PoseVisualizer` converts normalized landmark coordinates into
+pixels on a copy of each decoded frame. It uses MediaPipe's official pose
+connections and configurable visibility/presence thresholds to omit unreliable
+or out-of-bounds endpoints without changing the stored pose result. Missing-pose
+frames retain the source image and may show only optional diagnostic text.
+
+`scripts/visualize_pose.py` keeps the pipeline sequential: `VideoReader` to
+`PoseTracker` to `PoseVisualizer` to an OpenCV `VideoWriter`. The MP4 writer uses
+decoded dimensions for portrait and landscape sources, uses reported FPS or a
+documented 30 FPS fallback, and publishes a completed temporary file atomically.
+Generated overlays live in the Git-ignored backend output directory. OpenCV does
+not copy source audio into these development visualizations.
+
 Model acquisition is an explicit developer action through
 `scripts/download_pose_model.py`. The script downloads a pinned official Google
 asset, validates its SHA-256 checksum, and stores it under the Git-ignored backend
 model directory. `scripts/inspect_pose.py` streams VideoReader output through the
-tracker and reports diagnostic coverage without persisting landmarks or producing
-an overlay.
+tracker and reports diagnostic coverage without persisting landmarks.
 
 Pose processing is not yet connected to uploads. Only when it is deliberately
 integrated should states beyond `uploaded` and a background worker/job design be
